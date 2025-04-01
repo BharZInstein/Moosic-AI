@@ -425,6 +425,7 @@ def analyze_mood():
         
         # Try multiple methods to get recommendations, with increasing fallbacks
         recommendations = None
+        source = "unknown"  # Track the source of recommendations
         
         # Method 1: Try advanced recommendations with audio features based on mood
         try:
@@ -453,6 +454,7 @@ def analyze_mood():
                 **audio_features
             )
             
+            source = "spotify_advanced"
             logger.debug("Successfully got advanced recommendations")
         except Exception as e:
             logger.warning(f"Advanced recommendations failed: {str(e)}")
@@ -464,6 +466,7 @@ def analyze_mood():
                 
                 # Fall back to a simpler request
                 recommendations = sp.recommendations(seed_genres=[genre], limit=5)
+                source = "spotify_simple"
                 logger.debug("Successfully got simple genre recommendations")
             except Exception as e2:
                 logger.warning(f"Simple genre recommendations failed: {str(e2)}")
@@ -476,6 +479,7 @@ def analyze_mood():
                         # Get artist IDs from new releases
                         artist_ids = [album['artists'][0]['id'] for album in new_releases['albums']['items']]
                         recommendations = sp.recommendations(seed_artists=artist_ids[:2], limit=5)
+                        source = "spotify_new_releases"
                         logger.debug("Successfully got artist-based recommendations")
                     else:
                         raise Exception("No new releases found")
@@ -494,6 +498,7 @@ def analyze_mood():
                                 tracks = [item['track'] for item in tracks_response['items'] if item.get('track')]
                                 if tracks:
                                     recommendations = {'tracks': tracks}
+                                    source = "spotify_featured_playlist"
                                     logger.debug("Successfully got tracks from featured playlist")
                                 else:
                                     raise Exception("No tracks found in playlist")
@@ -508,15 +513,18 @@ def analyze_mood():
                         if mood_category in BACKUP_TRACKS_BY_MOOD:
                             logger.warning(f"Using backup tracks for mood: {mood_category}")
                             recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD[mood_category]}
+                            source = f"fallback_{mood_category}"
                         else:
                             logger.warning("Using default backup tracks")
                             recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD['default']}
+                            source = "fallback_default"
         
         # Return the results
         if recommendations and 'tracks' in recommendations and recommendations['tracks']:
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': recommendations['tracks']
+                'recommendations': recommendations['tracks'],
+                'source': source  # Include source in response
             })
         else:
             # This should never happen with our fallbacks, but just in case
@@ -528,7 +536,8 @@ def analyze_mood():
                 
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': backup_tracks
+                'recommendations': backup_tracks,
+                'source': 'fallback_last_resort'  # Include source in response
             })
             
     except Exception as e:
@@ -539,18 +548,22 @@ def analyze_mood():
         try:
             if 'mood_category' in locals() and mood_category in BACKUP_TRACKS_BY_MOOD:
                 backup_tracks = BACKUP_TRACKS_BY_MOOD[mood_category]
+                source = f"error_fallback_{mood_category}"
             else:
                 backup_tracks = BACKUP_TRACKS_BY_MOOD['default']
+                source = "error_fallback_default"
                 
             return jsonify({
                 'mood_analysis': mood_analysis if 'mood_analysis' in locals() else "I analyzed your mood and found some music recommendations.",
-                'recommendations': backup_tracks
+                'recommendations': backup_tracks,
+                'source': source  # Include source in response
             })
         except:
             # Ultimate fallback
             return jsonify({
                 'mood_analysis': "I analyzed your mood and found some music recommendations.",
-                'recommendations': BACKUP_TRACKS_BY_MOOD['default']
+                'recommendations': BACKUP_TRACKS_BY_MOOD['default'],
+                'source': 'ultimate_fallback'  # Include source in response
             })
 
 @app.route('/logout')

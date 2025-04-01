@@ -63,6 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
             gap: 1rem;
             margin-top: 1rem;
         }
+        .source-info {
+            background: #e2f0ff;
+            color: #0056b3;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin: 0.5rem 0;
+        }
     `;
     document.head.appendChild(style);
 
@@ -101,12 +109,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Display mood analysis
             moodAnalysis.textContent = data.mood_analysis;
             
+            // Display source information if available
+            let sourceHTML = '';
+            if (data.source) {
+                sourceHTML = `<div class="source-info">Source: ${formatSourceInfo(data.source)}</div>`;
+            }
+            
             // Display recommendations
             if (data.recommendations && data.recommendations.length > 0) {
-                recommendationsList.innerHTML = data.recommendations
+                recommendationsList.innerHTML = sourceHTML + data.recommendations
                     .map(track => `
                         <div class="track-card">
-                            <img src="${track.album.images[0]?.url || '/static/placeholder.jpg'}" alt="${track.name}">
+                            <img src="${track.album.images[0].url}" alt="${track.name}">
                             <h4>${track.name}</h4>
                             <p>${track.artists.map(artist => artist.name).join(', ')}</p>
                             <a href="${track.external_urls.spotify}" target="_blank" class="cta-button">Play on Spotify</a>
@@ -114,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     `)
                     .join('');
             } else {
-                recommendationsList.innerHTML = '<p>No recommendations found. Try describing your mood differently.</p>';
+                recommendationsList.innerHTML = sourceHTML + '<p>No recommendations found. Try describing your mood differently.</p>';
             }
 
             // Show results section
@@ -142,4 +156,24 @@ document.addEventListener('DOMContentLoaded', () => {
             moodText.classList.remove('loading');
         }
     });
+    
+    // Format source info into a more user-friendly message
+    function formatSourceInfo(source) {
+        if (source.startsWith('spotify_advanced')) {
+            return 'Spotify API with advanced mood parameters';
+        } else if (source.startsWith('spotify_simple')) {
+            return 'Spotify API with basic genre recommendations';
+        } else if (source.startsWith('spotify_new_releases')) {
+            return 'Spotify API based on new releases';
+        } else if (source.startsWith('spotify_featured_playlist')) {
+            return 'Spotify API featured playlist';
+        } else if (source.startsWith('fallback_')) {
+            const mood = source.replace('fallback_', '');
+            return `Fallback tracks for ${mood} mood`;
+        } else if (source.includes('fallback')) {
+            return 'Fallback tracks';
+        } else {
+            return source;
+        }
+    }
 });
