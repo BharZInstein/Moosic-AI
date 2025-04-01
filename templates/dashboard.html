@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moosic AI - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="dashboard-header">
+            <h1>Welcome, {{ user.display_name }}!</h1>
+            <div class="user-info">
+                <img src="{{ user.images[0].url if user.images else url_for('static', filename='default-avatar.png') }}" alt="Profile" class="profile-image">
+                <a href="{{ url_for('logout') }}" class="logout-button">Logout</a>
+            </div>
+        </header>
+        
+        <main class="dashboard-content">
+            <section class="mood-input">
+                <h2>How are you feeling today?</h2>
+                <textarea id="moodText" placeholder="Tell me about your mood..."></textarea>
+                <button id="analyzeMood" class="cta-button">Analyze Mood</button>
+            </section>
+            
+            <section class="results" id="resultsSection" style="display: none;">
+                <div class="mood-analysis">
+                    <h3>Mood Analysis</h3>
+                    <p id="moodAnalysis"></p>
+                </div>
+                
+                <div class="recommendations">
+                    <h3>Recommended Tracks</h3>
+                    <div id="recommendationsList" class="tracks-grid"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html> 

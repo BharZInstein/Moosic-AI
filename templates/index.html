@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moosic AI - Your Mood-Based Music Companion</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Moosic AI</h1>
+            <p class="tagline">Your Mood-Based Music Companion</p>
+        </header>
+        
+        <main>
+            <section class="hero">
+                <h2>Discover Music That Matches Your Mood</h2>
+                <p>Connect with Spotify and let AI analyze your mood to create the perfect playlist.</p>
+                <a href="{{ url_for('login') }}" class="cta-button">Connect with Spotify</a>
+            </section>
+            
+            <section class="features">
+                <div class="feature-card">
+                    <h3>Mood Analysis</h3>
+                    <p>Our AI analyzes your text to understand your current mood.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Smart Recommendations</h3>
+                    <p>Get personalized music recommendations based on your mood.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Spotify Integration</h3>
+                    <p>Seamlessly connect with your Spotify account.</p>
+                </div>
+            </section>
+        </main>
+        
+        <footer>
+            <p>&copy; 2024 Moosic AI. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html> 
