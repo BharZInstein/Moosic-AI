@@ -10,9 +10,41 @@ import random
 import traceback
 import time
 
+# Set up logging
+import logging
+
+class SensitiveDataFilter(logging.Filter):
+    def filter(self, record):
+        if record.getMessage():
+            # Sanitize Spotify tokens in logs
+            message = record.getMessage()
+            if 'Bearer ' in message:
+                # Sanitize Bearer tokens
+                record.msg = re.sub(r'Bearer [A-Za-z0-9_-]+', 'Bearer [REDACTED]', record.msg)
+            # Sanitize raw token values
+            record.msg = re.sub(r'[A-Za-z0-9_-]{50,}', '[REDACTED]', record.msg)
+        return True
+
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+console_handler.setFormatter(console_formatter)
+
+# File handler with sensitive data filtering
+file_handler = logging.FileHandler('app.log')
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+file_handler.setFormatter(file_formatter)
+file_handler.addFilter(SensitiveDataFilter())
+
+# Add handlers
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
 
 # Load environment variables
 load_dotenv()
@@ -814,8 +846,7 @@ def analyze_mood():
         if recommendations and 'tracks' in recommendations and recommendations['tracks']:
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': recommendations['tracks'],
-                'source': source  # Include source in response
+                'recommendations': recommendations['tracks']
             })
         else:
             # This should never happen with our fallbacks, but just in case
@@ -827,8 +858,7 @@ def analyze_mood():
                 
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': backup_tracks,
-                'source': 'fallback_last_resort'  # Include source in response
+                'recommendations': backup_tracks
             })
             
     except Exception as e:
@@ -839,22 +869,23 @@ def analyze_mood():
         try:
             if 'mood_category' in locals() and mood_category in BACKUP_TRACKS_BY_MOOD:
                 backup_tracks = BACKUP_TRACKS_BY_MOOD[mood_category]
-                source = f"error_fallback_{mood_category}"
+                source = f"error_fallback_{mood_category}"  # Keep for logging only
             else:
                 backup_tracks = BACKUP_TRACKS_BY_MOOD['default']
-                source = "error_fallback_default"
+                source = "error_fallback_default"  # Keep for logging only
+                
+            # Log the source but don't include in response
+            logger.debug(f"Using fallback tracks from source: {source}")
                 
             return jsonify({
                 'mood_analysis': mood_analysis if 'mood_analysis' in locals() else "I analyzed your mood and found some music recommendations.",
-                'recommendations': backup_tracks,
-                'source': source  # Include source in response
+                'recommendations': backup_tracks
             })
         except:
             # Ultimate fallback
             return jsonify({
                 'mood_analysis': "I analyzed your mood and found some music recommendations.",
-                'recommendations': BACKUP_TRACKS_BY_MOOD['default'],
-                'source': 'ultimate_fallback'  # Include source in response
+                'recommendations': BACKUP_TRACKS_BY_MOOD['default']
             })
 
 @app.route('/logout')
