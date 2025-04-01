@@ -474,7 +474,7 @@ def analyze_mood():
             
             logger.debug(f"Using genres: {valid_genres} with audio features: {audio_features}")
             
-            # Get available genre seeds from Spotify (for debugging)
+            # Get available genre seeds from Spotify
             try:
                 available_genres = sp.recommendation_genre_seeds()
                 logger.debug(f"Available Spotify genres: {available_genres}")
@@ -493,124 +493,277 @@ def analyze_mood():
             except Exception as genre_err:
                 logger.warning(f"Failed to get genre seeds: {str(genre_err)}")
             
-            # Get recommendations with specific audio features for this mood
-            logger.debug(f"Calling Spotify recommendations API with genres={valid_genres}, features={audio_features}")
-            recommendations = sp.recommendations(
-                seed_genres=valid_genres,
-                limit=5,
-                **audio_features
-            )
+            # Slightly randomize audio features to get more diverse recommendations
+            if 'target_tempo' in audio_features:
+                audio_features['target_tempo'] += random.randint(-10, 10)
+            if 'min_energy' in audio_features:
+                audio_features['min_energy'] = max(0.0, min(1.0, audio_features['min_energy'] + random.uniform(-0.1, 0.1)))
+            if 'max_energy' in audio_features:
+                audio_features['max_energy'] = max(0.0, min(1.0, audio_features['max_energy'] + random.uniform(-0.1, 0.1)))
+            if 'min_valence' in audio_features:
+                audio_features['min_valence'] = max(0.0, min(1.0, audio_features['min_valence'] + random.uniform(-0.1, 0.1)))
+            if 'max_valence' in audio_features:
+                audio_features['max_valence'] = max(0.0, min(1.0, audio_features['max_valence'] + random.uniform(-0.1, 0.1)))
             
-            # Verify we got actual tracks
-            if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
-                logger.warning("Spotify returned empty recommendations")
-                raise Exception("Empty recommendations returned")
+            # Try up to 3 different sets of recommendations to get more variety
+            all_tracks = []
+            attempt_count = 0
+            
+            while len(all_tracks) < 5 and attempt_count < 3:
+                # Add randomness by using different genres from our valid set on each attempt
+                attempt_count += 1
                 
-            track_names = [t['name'] for t in recommendations['tracks']]
-            logger.debug(f"Got {len(track_names)} recommendations: {track_names}")
+                # Get recommendations with specific audio features for this mood
+                logger.debug(f"Attempt {attempt_count}: Calling Spotify recommendations API with genres={valid_genres}, features={audio_features}")
+                current_recs = sp.recommendations(
+                    seed_genres=valid_genres,
+                    limit=10,  # Request more than we need to filter
+                    **audio_features
+                )
+                
+                # Verify we got actual tracks
+                if current_recs and 'tracks' in current_recs and current_recs['tracks']:
+                    # Filter tracks with proper images
+                    filtered_tracks = []
+                    for track in current_recs['tracks']:
+                        # Check if track has valid album art
+                        has_valid_image = (
+                            track.get('album') and 
+                            track['album'].get('images') and 
+                            len(track['album']['images']) > 0 and
+                            'url' in track['album']['images'][0] and
+                            not track['album']['images'][0]['url'].endswith('dog.jpg')  # Filter out dog image
+                        )
+                        
+                        if has_valid_image:
+                            # Check if track is not already in our collection
+                            track_id = track.get('id')
+                            if track_id and not any(t.get('id') == track_id for t in all_tracks):
+                                filtered_tracks.append(track)
+                    
+                    logger.debug(f"Attempt {attempt_count}: Found {len(filtered_tracks)} valid tracks")
+                    all_tracks.extend(filtered_tracks)
+                    
+                    # If we have enough tracks, break out
+                    if len(all_tracks) >= 5:
+                        break
+                    
+                    # Otherwise, adjust our parameters for the next attempt
+                    if valid_genres and len(valid_genres) > 1:
+                        # Shuffle the genres to get different recommendations
+                        random.shuffle(valid_genres)
+                
+                # Only make additional attempts if we need more tracks
+                if len(all_tracks) >= 5:
+                    break
+                
+                # Wait briefly between attempts to avoid rate limiting
+                time.sleep(0.1)
             
-            source = "spotify_advanced"
-            logger.debug("Successfully got advanced recommendations")
+            # Take the top 5 tracks or whatever we got
+            if all_tracks:
+                recommendations = {'tracks': all_tracks[:5]}
+                source = "spotify_advanced"
+                logger.debug(f"Successfully got {len(all_tracks[:5])} advanced recommendations")
+            else:
+                raise Exception("No valid tracks found after multiple attempts")
         except Exception as e:
             logger.warning(f"Advanced recommendations failed: {str(e)}")
             traceback.print_exc()
             
-            # Method 2: Try simpler genre-based recommendations
+            # Method 2: Try with user's top tracks for diversity
             try:
-                logger.debug("Trying simple genre-based recommendations")
+                logger.debug("Trying to get recommendations based on user's top tracks")
+                top_tracks = sp.current_user_top_tracks(limit=5, time_range='medium_term')
                 
-                # Try with a very basic, reliable genre
-                safe_genre = "pop"
-                logger.debug(f"Using safe genre '{safe_genre}' for simple recommendations")
-                
-                # Fall back to a simpler request with minimal parameters
-                recommendations = sp.recommendations(seed_genres=[safe_genre], limit=5)
-                
-                # Verify we got actual tracks
-                if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
-                    logger.warning("Spotify returned empty simple recommendations")
-                    raise Exception("Empty recommendations returned")
-                    
-                track_names = [t['name'] for t in recommendations['tracks']]
-                logger.debug(f"Got {len(track_names)} simple recommendations: {track_names}")
-                
-                source = "spotify_simple"
-                logger.debug("Successfully got simple genre recommendations")
+                if top_tracks and 'items' in top_tracks and top_tracks['items']:
+                    # Use track IDs from user's top tracks as seeds
+                    track_ids = [track['id'] for track in top_tracks['items'][:2]]
+                    if track_ids:
+                        top_based_recommendations = sp.recommendations(
+                            seed_tracks=track_ids,
+                            limit=5
+                        )
+                        
+                        if top_based_recommendations and 'tracks' in top_based_recommendations:
+                            # Filter out tracks with bad images
+                            filtered_tracks = [
+                                t for t in top_based_recommendations['tracks'] 
+                                if t.get('album') and t['album'].get('images') and 
+                                len(t['album']['images']) > 0 and
+                                not t['album']['images'][0]['url'].endswith('dog.jpg')
+                            ]
+                            
+                            if filtered_tracks:
+                                recommendations = {'tracks': filtered_tracks[:5]}
+                                source = "spotify_user_top_tracks"
+                                logger.debug(f"Successfully got {len(filtered_tracks[:5])} recommendations based on user's top tracks")
+                                raise Exception("Proceeding to next method since no tracks from user's top")
+                else:
+                    logger.warning("No user top tracks found")
+                    raise Exception("No top tracks found")
             except Exception as e2:
-                logger.warning(f"Simple genre recommendations failed: {str(e2)}")
+                logger.warning(f"User top tracks approach failed: {str(e2)}")
                 
-                # Method 3: Try with featured playlists as a more reliable option
+                # Method 3: Try simpler genre-based recommendations
                 try:
-                    logger.debug("Trying to get tracks from featured playlists")
-                    playlists = sp.featured_playlists(limit=1)
-                    if playlists and 'playlists' in playlists and playlists['playlists']['items']:
-                        playlist_id = playlists['playlists']['items'][0]['id']
-                        logger.debug(f"Found featured playlist with ID: {playlist_id}")
-                        
-                        tracks_response = sp.playlist_tracks(playlist_id, limit=5)
-                        
-                        if tracks_response and 'items' in tracks_response:
-                            tracks = [item['track'] for item in tracks_response['items'] if item.get('track')]
-                            if tracks:
-                                recommendations = {'tracks': tracks}
-                                source = "spotify_featured_playlist"
-                                logger.debug(f"Successfully got {len(tracks)} tracks from featured playlist")
-                            else:
-                                raise Exception("No tracks found in playlist")
-                        else:
-                            raise Exception("Invalid playlist tracks response")
-                    else:
-                        raise Exception("No featured playlists found")
-                except Exception as e3:
-                    logger.warning(f"Featured playlist approach failed: {str(e3)}")
+                    logger.debug("Trying simple genre-based recommendations")
                     
-                    # Method 4: Try with new releases
+                    # Try with popular genres but pick 3 random ones for variety
+                    popular_genres = ["pop", "rock", "hip-hop", "dance", "electronic", "indie", "r-n-b", "jazz", "classical"]
+                    random.shuffle(popular_genres)
+                    selected_genres = popular_genres[:3]
+                    
+                    logger.debug(f"Using popular genres '{selected_genres}' for simple recommendations")
+                    
+                    # Fall back to a simpler request with minimal parameters
+                    simple_recommendations = sp.recommendations(seed_genres=selected_genres, limit=10)
+                    
+                    # Verify we got actual tracks with good images
+                    if simple_recommendations and 'tracks' in simple_recommendations:
+                        filtered_tracks = [
+                            t for t in simple_recommendations['tracks'] 
+                            if t.get('album') and t['album'].get('images') and 
+                            len(t['album']['images']) > 0 and
+                            not t['album']['images'][0]['url'].endswith('dog.jpg')
+                        ]
+                        
+                        if filtered_tracks:
+                            recommendations = {'tracks': filtered_tracks[:5]}
+                            track_names = [t['name'] for t in filtered_tracks[:5]]
+                            logger.debug(f"Got {len(filtered_tracks[:5])} simple recommendations: {track_names}")
+                            
+                            source = "spotify_simple"
+                            logger.debug("Successfully got simple genre recommendations")
+                        else:
+                            raise Exception("No valid tracks after filtering")
+                    else:
+                        raise Exception("Empty recommendations returned")
+                except Exception as e3:
+                    logger.warning(f"Simple genre recommendations failed: {str(e3)}")
+                    
+                    # Method 4: Try with featured playlists as a more reliable option
                     try:
-                        logger.debug("Trying to get tracks from new releases")
-                        new_releases = sp.new_releases(limit=5)
-                        if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
-                            # Get the first few albums
-                            albums = new_releases['albums']['items'][:2]
+                        logger.debug("Trying to get tracks from featured playlists")
+                        playlists = sp.featured_playlists(limit=5)
+                        
+                        if playlists and 'playlists' in playlists and playlists['playlists']['items']:
+                            # Try multiple playlists to get more variety
                             all_tracks = []
                             
-                            for album in albums:
+                            for playlist_item in playlists['playlists']['items'][:3]:  # Try up to 3 playlists
                                 try:
-                                    album_id = album['id']
-                                    album_tracks = sp.album_tracks(album_id, limit=3)
-                                    if album_tracks and 'items' in album_tracks:
-                                        all_tracks.extend(album_tracks['items'][:2])  # Get first 2 tracks from each album
-                                except Exception as album_err:
-                                    logger.warning(f"Error getting album tracks: {str(album_err)}")
+                                    playlist_id = playlist_item['id']
+                                    logger.debug(f"Checking featured playlist: {playlist_item['name']} (ID: {playlist_id})")
+                                    
+                                    tracks_response = sp.playlist_tracks(playlist_id, limit=10)
+                                    
+                                    if tracks_response and 'items' in tracks_response:
+                                        playlist_tracks = [
+                                            item['track'] for item in tracks_response['items'] 
+                                            if item.get('track') and 
+                                            item['track'].get('album') and 
+                                            item['track']['album'].get('images') and 
+                                            len(item['track']['album']['images']) > 0 and
+                                            not item['track']['album']['images'][0]['url'].endswith('dog.jpg')
+                                        ]
+                                        
+                                        # Add new unique tracks to our collection
+                                        for track in playlist_tracks:
+                                            track_id = track.get('id')
+                                            if track_id and not any(t.get('id') == track_id for t in all_tracks):
+                                                all_tracks.append(track)
+                                        
+                                        logger.debug(f"Found {len(playlist_tracks)} valid tracks in playlist {playlist_item['name']}")
+                                        
+                                        # If we have enough tracks, stop looking at more playlists
+                                        if len(all_tracks) >= 5:
+                                            break
+                                except Exception as playlist_err:
+                                    logger.warning(f"Error processing playlist {playlist_id}: {str(playlist_err)}")
                             
+                            # Check if we found any tracks
                             if all_tracks:
-                                # Format tracks to match recommendations format
-                                formatted_tracks = []
-                                for track in all_tracks:
-                                    track_with_album = track.copy()
-                                    # Add album info if it's missing
-                                    if 'album' not in track_with_album and albums:
-                                        track_with_album['album'] = albums[0]
-                                    formatted_tracks.append(track_with_album)
-                                
-                                recommendations = {'tracks': formatted_tracks[:5]}  # Limit to 5 tracks
-                                source = "spotify_new_releases"
-                                logger.debug(f"Successfully got {len(formatted_tracks)} tracks from new releases")
+                                # Randomize the order for variety
+                                random.shuffle(all_tracks)
+                                recommendations = {'tracks': all_tracks[:5]}
+                                source = "spotify_featured_playlist"
+                                logger.debug(f"Successfully got {len(all_tracks[:5])} tracks from featured playlists")
                             else:
-                                raise Exception("No tracks found in new releases")
+                                raise Exception("No valid tracks found in any featured playlists")
                         else:
-                            raise Exception("No new releases found")
+                            raise Exception("No featured playlists found")
                     except Exception as e4:
-                        logger.warning(f"New releases approach failed: {str(e4)}")
-                    
-                        # Method 5: Use hardcoded backup tracks based on mood
-                        if mood_category in BACKUP_TRACKS_BY_MOOD:
-                            logger.warning(f"Using backup tracks for mood: {mood_category}")
-                            recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD[mood_category]}
-                            source = f"fallback_{mood_category}"
-                        else:
-                            logger.warning("Using default backup tracks")
-                            recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD['default']}
-                            source = "fallback_default"
+                        logger.warning(f"Featured playlist approach failed: {str(e4)}")
+                        
+                        # Method 5: Try with new releases
+                        try:
+                            logger.debug("Trying to get tracks from new releases")
+                            new_releases = sp.new_releases(limit=10)
+                            if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
+                                # Get more albums than before
+                                albums = new_releases['albums']['items'][:5]
+                                all_tracks = []
+                                
+                                for album in albums:
+                                    try:
+                                        album_id = album['id']
+                                        album_name = album.get('name', 'Unknown Album')
+                                        logger.debug(f"Checking album: {album_name} (ID: {album_id})")
+                                        
+                                        # Check if album has valid image
+                                        has_valid_image = (
+                                            album.get('images') and 
+                                            len(album['images']) > 0 and
+                                            'url' in album['images'][0] and
+                                            not album['images'][0]['url'].endswith('dog.jpg')
+                                        )
+                                        
+                                        if has_valid_image:
+                                            album_tracks = sp.album_tracks(album_id, limit=5)
+                                            if album_tracks and 'items' in album_tracks:
+                                                # Format tracks to match recommendations format
+                                                for track in album_tracks['items'][:2]:  # Get 2 tracks from each album
+                                                    track_with_album = track.copy()
+                                                    # Add album info if it's missing
+                                                    if 'album' not in track_with_album:
+                                                        track_with_album['album'] = album
+                                                    
+                                                    # Only add if not already in our list
+                                                    track_id = track_with_album.get('id')
+                                                    if track_id and not any(t.get('id') == track_id for t in all_tracks):
+                                                        all_tracks.append(track_with_album)
+                                                
+                                                logger.debug(f"Added {len(album_tracks['items'][:2])} tracks from album {album_name}")
+                                                
+                                                # If we have enough tracks, stop processing more albums
+                                                if len(all_tracks) >= 5:
+                                                    break
+                                    except Exception as album_err:
+                                        logger.warning(f"Error getting album tracks: {str(album_err)}")
+                                
+                                if all_tracks:
+                                    # Randomize the track order for variety
+                                    random.shuffle(all_tracks)
+                                    recommendations = {'tracks': all_tracks[:5]}
+                                    source = "spotify_new_releases"
+                                    logger.debug(f"Successfully got {len(all_tracks[:5])} tracks from new releases")
+                                else:
+                                    raise Exception("No tracks found in new releases")
+                            else:
+                                raise Exception("No new releases found")
+                        except Exception as e5:
+                            logger.warning(f"New releases approach failed: {str(e5)}")
+                        
+                            # Method 6: Use hardcoded backup tracks based on mood
+                            if mood_category in BACKUP_TRACKS_BY_MOOD:
+                                logger.warning(f"Using backup tracks for mood: {mood_category}")
+                                recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD[mood_category]}
+                                source = f"fallback_{mood_category}"
+                            else:
+                                logger.warning("Using default backup tracks")
+                                recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD['default']}
+                                source = "fallback_default"
         
         # Return the results
         if recommendations and 'tracks' in recommendations and recommendations['tracks']:
