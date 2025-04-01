@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import json
 import logging
 import re
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -25,20 +26,43 @@ sp_oauth = SpotifyOAuth(
     scope='user-library-read playlist-read-private user-read-private user-read-email'
 )
 
-# Define a simple fallback mood analyzer function
+# List of valid Spotify genres we can use for recommendations
+# These are guaranteed to work with the API
+VALID_SPOTIFY_GENRES = [
+    "acoustic", "afrobeat", "alt-rock", "alternative", "ambient", "anime", 
+    "black-metal", "bluegrass", "blues", "brazil", "breakbeat", "british", 
+    "cantopop", "chicago-house", "children", "chill", "classical", "club", 
+    "comedy", "country", "dance", "dancehall", "death-metal", "deep-house", 
+    "detroit-techno", "disco", "disney", "drum-and-bass", "dub", "dubstep", 
+    "edm", "electro", "electronic", "emo", "folk", "forro", "french", "funk", 
+    "garage", "german", "gospel", "goth", "grindcore", "groove", "grunge", 
+    "guitar", "happy", "hard-rock", "hardcore", "hardstyle", "heavy-metal", 
+    "hip-hop", "house", "idm", "indian", "indie", "indie-pop", "industrial", 
+    "iranian", "j-dance", "j-idol", "j-pop", "j-rock", "jazz", "k-pop", "kids", 
+    "latin", "latino", "malay", "mandopop", "metal", "metalcore", "minimal-techno", 
+    "mpb", "new-age", "opera", "pagode", "party", "piano", "pop", "pop-film", 
+    "power-pop", "progressive-house", "psych-rock", "punk", "punk-rock", "r-n-b", 
+    "reggae", "reggaeton", "rock", "rock-n-roll", "rockabilly", "romance", "sad", 
+    "salsa", "samba", "sertanejo", "show-tunes", "singer-songwriter", "ska", 
+    "sleep", "songwriter", "soul", "spanish", "study", "summer", "swedish", "synth-pop", 
+    "tango", "techno", "trance", "trip-hop", "turkish", "work-out", "world-music"
+]
+
+# Define a simple mood analyzer function
 def analyze_mood_text(text):
     """Simple rule-based mood analyzer as a fallback for the Gemini API"""
     text = text.lower()
     
     # Define mood keywords and their corresponding analysis and genres
+    # Map our moods to valid Spotify genres
     mood_map = {
         'happy': {
             'analysis': 'You seem happy and upbeat! Your mood is positive and energetic.',
-            'genre': 'pop'
+            'genre': 'happy'
         },
         'sad': {
             'analysis': 'You seem to be feeling down or melancholic. Music can help lift your spirits.',
-            'genre': 'indie'
+            'genre': 'sad'
         },
         'angry': {
             'analysis': 'Your text suggests feelings of frustration or anger. Some energizing music might help.',
@@ -66,7 +90,7 @@ def analyze_mood_text(text):
         },
         'nostalgic': {
             'analysis': 'Your words have a nostalgic quality. Music that reminds you of good times might resonate.',
-            'genre': 'classic'
+            'genre': 'rock-n-roll'
         },
         'focused': {
             'analysis': 'You seem to be in a focused state. Some concentration-enhancing music could help maintain this.',
@@ -78,7 +102,7 @@ def analyze_mood_text(text):
         },
         'energetic': {
             'analysis': 'Your text suggests high energy levels. Some upbeat music would match this well.',
-            'genre': 'workout'
+            'genre': 'work-out'
         },
         'calm': {
             'analysis': 'You seem calm and collected. Some gentle music would complement this mood.',
@@ -113,10 +137,11 @@ def analyze_mood_text(text):
         elif any(phrase in text for phrase in ["need energy", "workout", "exercise"]):
             matched_moods.append("energetic")
         else:
-            # Default if no mood is detected
+            # Default if no mood is detected - pick from a few safe genres
+            safe_genres = ["pop", "rock", "indie", "chill"]
             return {
                 'analysis': 'I analyzed your text and will recommend some popular music that might match your current state.',
-                'genre': 'pop'
+                'genre': random.choice(safe_genres)
             }
     
     # Use the first matched mood
@@ -158,7 +183,7 @@ def analyze_mood():
         return jsonify({'error': 'No text provided'}), 400
     
     try:
-        # Use our fallback mood analyzer instead of Gemini
+        # Use our mood analyzer
         logger.debug(f"Analyzing mood text: {text}")
         mood_result = analyze_mood_text(text)
         mood_analysis = mood_result['analysis']
@@ -171,7 +196,16 @@ def analyze_mood():
         sp = Spotify(auth=session['token_info']['access_token'])
         
         try:
-            # Get personalized recommendations
+            # Ensure we're using a valid genre
+            if genre not in VALID_SPOTIFY_GENRES:
+                logger.warning(f"Genre {genre} not found in valid Spotify genres, using pop instead")
+                genre = "pop"
+                
+            # Get available genres from Spotify (for debugging)
+            available_genres = sp.recommendation_genre_seeds()
+            logger.debug(f"Available Spotify genres: {available_genres}")
+            
+            # Get personalized recommendations using the valid genre
             recommendations = sp.recommendations(seed_genres=[genre], limit=5)
             
             return jsonify({
@@ -180,9 +214,35 @@ def analyze_mood():
             })
         except Exception as e:
             logger.error(f"Error getting Spotify recommendations: {str(e)}")
+            
+            # Try a different approach if recommendations fail
+            try:
+                # Get user's top tracks and use their artists as seeds instead
+                top_tracks = sp.current_user_top_tracks(limit=5)
+                if top_tracks and top_tracks.get('items'):
+                    artist_ids = [track['artists'][0]['id'] for track in top_tracks['items'][:2]]
+                    recommendations = sp.recommendations(seed_artists=artist_ids, limit=5)
+                    
+                    return jsonify({
+                        'mood_analysis': mood_analysis,
+                        'recommendations': recommendations['tracks']
+                    })
+                else:
+                    # Last resort: get featured playlists and return tracks from there
+                    playlists = sp.featured_playlists(limit=1)
+                    if playlists and playlists.get('playlists') and playlists['playlists'].get('items'):
+                        playlist_id = playlists['playlists']['items'][0]['id']
+                        tracks = sp.playlist_tracks(playlist_id, limit=5)
+                        return jsonify({
+                            'mood_analysis': mood_analysis,
+                            'recommendations': [item['track'] for item in tracks['items']]
+                        })
+            except Exception as backup_error:
+                logger.error(f"Backup recommendation method failed: {str(backup_error)}")
+            
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'error': f'Could not fetch music recommendations: {str(e)}'
+                'error': f'Could not fetch music recommendations. Please try again later.'
             }), 500
         
     except Exception as e:
