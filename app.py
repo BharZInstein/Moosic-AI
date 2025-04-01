@@ -50,6 +50,187 @@ VALID_SPOTIFY_GENRES = [
     "tango", "techno", "trance", "trip-hop", "turkish", "work-out", "world-music"
 ]
 
+# Audio features for different moods to create more diverse recommendations
+MOOD_FEATURES = {
+    "happy": {
+        "min_valence": 0.7,
+        "min_energy": 0.7,
+        "target_tempo": 120,
+        "genres": ["happy", "pop", "dance", "disco"]
+    },
+    "sad": {
+        "max_valence": 0.4,
+        "max_energy": 0.4, 
+        "target_tempo": 90,
+        "genres": ["sad", "indie", "singer-songwriter", "piano"]
+    },
+    "relaxed": {
+        "max_energy": 0.4,
+        "target_instrumentalness": 0.5,
+        "genres": ["ambient", "chill", "study", "piano"]
+    },
+    "energetic": {
+        "min_energy": 0.8,
+        "min_tempo": 125,
+        "genres": ["work-out", "dance", "edm", "rock"]
+    },
+    "focused": {
+        "target_instrumentalness": 0.7,
+        "max_speechiness": 0.1,
+        "genres": ["study", "classical", "ambient", "piano"]
+    },
+    "angry": {
+        "min_energy": 0.7,
+        "max_valence": 0.4,
+        "target_tempo": 140,
+        "genres": ["rock", "metal", "hard-rock", "alt-rock"]
+    },
+    "nostalgic": {
+        "target_acousticness": 0.6,
+        "genres": ["rock-n-roll", "blues", "jazz", "soul"]
+    }
+}
+
+# Hardcoded backup tracks by mood (as a last resort)
+BACKUP_TRACKS_BY_MOOD = {
+    "happy": [
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2736acc3a55cbab6f9ae5505aa4"}]},
+            "artists": [{"name": "Taylor Swift"}],
+            "name": "Shake It Off",
+            "external_urls": {"spotify": "https://open.spotify.com/track/0cqRj7pUJDkTCEsJkx8snD"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96"}]},
+            "artists": [{"name": "Ed Sheeran"}],
+            "name": "Shape of You",
+            "external_urls": {"spotify": "https://open.spotify.com/track/7qiZfU4dY1lWllzX7mPBI3"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273c5148520a59be191eea29985"}]},
+            "artists": [{"name": "Pharrell Williams"}],
+            "name": "Happy",
+            "external_urls": {"spotify": "https://open.spotify.com/track/60nZcImufyMA1MKQY3dcCO"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2739e1cfc756886ac782e363d79"}]},
+            "artists": [{"name": "Justin Timberlake"}],
+            "name": "Can't Stop The Feeling!",
+            "external_urls": {"spotify": "https://open.spotify.com/track/1WkMMavIMc4JZ8cfMmxHkI"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273f46b9d202509a8f7384b90de"}]},
+            "artists": [{"name": "Bruno Mars"}],
+            "name": "Uptown Funk",
+            "external_urls": {"spotify": "https://open.spotify.com/track/32OlwWuMpZ6b0aN2RZOeMS"}
+        }
+    ],
+    "sad": [
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2735ef878a782c987d38d82b605"}]},
+            "artists": [{"name": "Adele"}],
+            "name": "Someone Like You",
+            "external_urls": {"spotify": "https://open.spotify.com/track/1T3Sdf6j5S5HXxyc9dyD5W"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273e8b066f70c206551210d902b"}]},
+            "artists": [{"name": "Billie Eilish"}],
+            "name": "when the party's over",
+            "external_urls": {"spotify": "https://open.spotify.com/track/43zdsphuZLzwA9k4DJhU0I"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2734a5584794d8a1e9f911f3977"}]},
+            "artists": [{"name": "Lewis Capaldi"}],
+            "name": "Someone You Loved",
+            "external_urls": {"spotify": "https://open.spotify.com/track/7qEHsqek33rTcFNT9PFqLf"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2736c9e3e57dc88c33fde5379a2"}]},
+            "artists": [{"name": "Coldplay"}],
+            "name": "Fix You",
+            "external_urls": {"spotify": "https://open.spotify.com/track/7LVHVU3tWfcxj5aiPFEW4Q"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273e787cffec20aa2a396a61647"}]},
+            "artists": [{"name": "James Bay"}],
+            "name": "Let It Go",
+            "external_urls": {"spotify": "https://open.spotify.com/track/13HVjjWUZFaWilh2QUJKsP"}
+        }
+    ],
+    "relaxed": [
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273a40e3897b8aa1be97bf5992f"}]},
+            "artists": [{"name": "Bon Iver"}],
+            "name": "Holocene",
+            "external_urls": {"spotify": "https://open.spotify.com/track/3TnoWk9cUH4jfZ07L8feSr"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273c79b600289a80aaef74d155d"}]},
+            "artists": [{"name": "Sigur Rós"}],
+            "name": "Hoppípolla",
+            "external_urls": {"spotify": "https://open.spotify.com/track/6eTGxxQxiTFE6LfZHC33Wm"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273ce85c93e88cd5bbf98cc5366"}]},
+            "artists": [{"name": "Brian Eno"}],
+            "name": "1/1",
+            "external_urls": {"spotify": "https://open.spotify.com/track/7M4YXpgGQbcqZVG4ZF0Z2Q"}
+        }
+    ],
+    "energetic": [
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b27358ecb3e5ec3bbef70ee09a43"}]},
+            "artists": [{"name": "The Weeknd"}],
+            "name": "Blinding Lights",
+            "external_urls": {"spotify": "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2732f44aec83b20e40f3baef73c"}]},
+            "artists": [{"name": "Dua Lipa"}],
+            "name": "Don't Start Now",
+            "external_urls": {"spotify": "https://open.spotify.com/track/3PfIrDoz19wz7qK7tYeu62"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273e787cffec20aa2a396a61647"}]},
+            "artists": [{"name": "Daft Punk"}],
+            "name": "Get Lucky",
+            "external_urls": {"spotify": "https://open.spotify.com/track/2Foc5Q5nqNiosCNqttzHof"}
+        }
+    ],
+    "default": [
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96"}]},
+            "artists": [{"name": "Ed Sheeran"}],
+            "name": "Shape of You",
+            "external_urls": {"spotify": "https://open.spotify.com/track/7qiZfU4dY1lWllzX7mPBI3"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273e8b066f70c206551210d902b"}]},
+            "artists": [{"name": "Billie Eilish"}],
+            "name": "bad guy",
+            "external_urls": {"spotify": "https://open.spotify.com/track/2Fxmhks0bxGSBdJ92vM42m"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b27358ecb3e5ec3bbef70ee09a43"}]},
+            "artists": [{"name": "The Weeknd"}],
+            "name": "Blinding Lights",
+            "external_urls": {"spotify": "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2732f44aec83b20e40f3baef73c"}]},
+            "artists": [{"name": "Dua Lipa"}],
+            "name": "Don't Start Now",
+            "external_urls": {"spotify": "https://open.spotify.com/track/3PfIrDoz19wz7qK7tYeu62"}
+        },
+        {
+            "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2736acc3a55cbab6f9ae5505aa4"}]},
+            "artists": [{"name": "Taylor Swift"}],
+            "name": "Shake It Off",
+            "external_urls": {"spotify": "https://open.spotify.com/track/0cqRj7pUJDkTCEsJkx8snD"}
+        }
+    ]
+}
+
 # Define a simple mood analyzer function
 def analyze_mood_text(text):
     """Simple rule-based mood analyzer as a fallback for the Gemini API"""
@@ -60,63 +241,78 @@ def analyze_mood_text(text):
     mood_map = {
         'happy': {
             'analysis': 'You seem happy and upbeat! Your mood is positive and energetic.',
-            'genre': 'happy'
+            'genre': 'happy',
+            'mood_category': 'happy'
         },
         'sad': {
             'analysis': 'You seem to be feeling down or melancholic. Music can help lift your spirits.',
-            'genre': 'sad'
+            'genre': 'sad',
+            'mood_category': 'sad'
         },
         'angry': {
             'analysis': 'Your text suggests feelings of frustration or anger. Some energizing music might help.',
-            'genre': 'rock'
+            'genre': 'rock',
+            'mood_category': 'angry'
         },
         'tired': {
             'analysis': 'You sound tired or fatigued. Some relaxing music could be just what you need.',
-            'genre': 'chill'
+            'genre': 'chill',
+            'mood_category': 'relaxed'
         },
         'excited': {
             'analysis': 'You seem very excited and enthusiastic! Some upbeat music would match your energy.',
-            'genre': 'dance'
+            'genre': 'dance',
+            'mood_category': 'energetic'
         },
         'relaxed': {
             'analysis': 'You appear to be in a calm, relaxed state. Some smooth music would complement this well.',
-            'genre': 'ambient'
+            'genre': 'ambient',
+            'mood_category': 'relaxed'
         },
         'stressed': {
             'analysis': 'You seem to be experiencing stress. Some calming music might help you unwind.',
-            'genre': 'classical'
+            'genre': 'classical',
+            'mood_category': 'relaxed'
         },
         'bored': {
             'analysis': 'You sound a bit bored or understimulated. Some engaging music could help.',
-            'genre': 'pop'
+            'genre': 'pop',
+            'mood_category': 'energetic'
         },
         'nostalgic': {
             'analysis': 'Your words have a nostalgic quality. Music that reminds you of good times might resonate.',
-            'genre': 'rock-n-roll'
+            'genre': 'rock-n-roll',
+            'mood_category': 'nostalgic'
         },
         'focused': {
             'analysis': 'You seem to be in a focused state. Some concentration-enhancing music could help maintain this.',
-            'genre': 'study'
+            'genre': 'study',
+            'mood_category': 'focused'
         },
         'sleepy': {
             'analysis': 'You sound sleepy or drowsy. Some gentle music could help you relax further.',
-            'genre': 'sleep'
+            'genre': 'sleep',
+            'mood_category': 'relaxed'
         },
         'energetic': {
             'analysis': 'Your text suggests high energy levels. Some upbeat music would match this well.',
-            'genre': 'work-out'
+            'genre': 'work-out',
+            'mood_category': 'energetic'
         },
         'calm': {
             'analysis': 'You seem calm and collected. Some gentle music would complement this mood.',
-            'genre': 'chill'
+            'genre': 'chill',
+            'mood_category': 'relaxed'
         },
         'anxious': {
             'analysis': 'Your text suggests some anxiety or worry. Some calming music might help you relax.',
-            'genre': 'ambient'
+            'genre': 'ambient',
+            'mood_category': 'relaxed'
         },
         'love': {
             'analysis': 'Your words suggest feelings of love or romance. Some heartfelt music would match this mood.',
-            'genre': 'romance'
+            'genre': 'romance',
+            'mood_category': 'happy'
         }
     }
     
@@ -140,10 +336,12 @@ def analyze_mood_text(text):
             matched_moods.append("energetic")
         else:
             # Default if no mood is detected - pick from a few safe genres
-            safe_genres = ["pop", "rock", "indie", "chill"]
+            safe_moods = ["happy", "relaxed", "energetic", "focused"]
+            selected = random.choice(safe_moods)
             return {
-                'analysis': 'I analyzed your text and will recommend some popular music that might match your current state.',
-                'genre': random.choice(safe_genres)
+                'analysis': 'I analyzed your text and will recommend some music that might match your current state.',
+                'genre': mood_map[selected]['genre'],
+                'mood_category': mood_map[selected]['mood_category']
             }
     
     # Use the first matched mood
@@ -164,40 +362,6 @@ def get_spotify_client():
         session['token_info'] = token_info
     
     return Spotify(auth=token_info['access_token'])
-
-# Hardcoded backup tracks (as a last resort)
-BACKUP_TRACKS = [
-    {
-        "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96"}]},
-        "artists": [{"name": "Ed Sheeran"}],
-        "name": "Shape of You",
-        "external_urls": {"spotify": "https://open.spotify.com/track/7qiZfU4dY1lWllzX7mPBI3"}
-    },
-    {
-        "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b273e8b066f70c206551210d902b"}]},
-        "artists": [{"name": "Billie Eilish"}],
-        "name": "bad guy",
-        "external_urls": {"spotify": "https://open.spotify.com/track/2Fxmhks0bxGSBdJ92vM42m"}
-    },
-    {
-        "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b27358ecb3e5ec3bbef70ee09a43"}]},
-        "artists": [{"name": "The Weeknd"}],
-        "name": "Blinding Lights",
-        "external_urls": {"spotify": "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b"}
-    },
-    {
-        "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2732f44aec83b20e40f3baef73c"}]},
-        "artists": [{"name": "Dua Lipa"}],
-        "name": "Don't Start Now",
-        "external_urls": {"spotify": "https://open.spotify.com/track/3PfIrDoz19wz7qK7tYeu62"}
-    },
-    {
-        "album": {"images": [{"url": "https://i.scdn.co/image/ab67616d0000b2736acc3a55cbab6f9ae5505aa4"}]},
-        "artists": [{"name": "Taylor Swift"}],
-        "name": "Shake It Off",
-        "external_urls": {"spotify": "https://open.spotify.com/track/0cqRj7pUJDkTCEsJkx8snD"}
-    }
-]
 
 @app.route('/')
 def index():
@@ -248,9 +412,11 @@ def analyze_mood():
         mood_result = analyze_mood_text(text)
         mood_analysis = mood_result['analysis']
         genre = mood_result['genre']
+        mood_category = mood_result['mood_category']
         
         logger.debug(f"Mood analysis result: {mood_analysis}")
         logger.debug(f"Selected genre: {genre}")
+        logger.debug(f"Mood category: {mood_category}")
         
         # Get a fresh Spotify client
         sp = get_spotify_client()
@@ -260,68 +426,91 @@ def analyze_mood():
         # Try multiple methods to get recommendations, with increasing fallbacks
         recommendations = None
         
-        # Method 1: Try genre-based recommendations
+        # Method 1: Try advanced recommendations with audio features based on mood
         try:
-            logger.debug("Trying genre-based recommendations")
+            logger.debug(f"Trying advanced recommendations for mood: {mood_category}")
             
-            # Ensure we're using a valid genre
-            if genre not in VALID_SPOTIFY_GENRES:
-                logger.warning(f"Genre {genre} not found in valid Spotify genres, using pop instead")
-                genre = "pop"
+            # Get audio features for this mood if available
+            audio_features = {}
+            if mood_category in MOOD_FEATURES:
+                audio_features = MOOD_FEATURES[mood_category].copy()
+                # Remove the genres key to use separately
+                genres = audio_features.pop('genres', [genre])
+            else:
+                genres = [genre]
             
-            # Debug: Get and log available genres
-            try:
-                available_genres = sp.recommendation_genre_seeds()
-                logger.debug(f"Available Spotify genres: {available_genres}")
-            except Exception as genre_err:
-                logger.warning(f"Failed to get genre seeds: {genre_err}")
+            # Ensure we're using valid genres (take up to 2)
+            valid_genres = [g for g in genres if g in VALID_SPOTIFY_GENRES][:2]
+            if not valid_genres:
+                valid_genres = ["pop"]  # Default fallback
             
-            # Try with genre recommendation
-            recommendations = sp.recommendations(seed_genres=[genre], limit=5)
-            logger.debug("Successfully got genre-based recommendations")
+            logger.debug(f"Using genres: {valid_genres} with audio features: {audio_features}")
+            
+            # Get recommendations with specific audio features for this mood
+            recommendations = sp.recommendations(
+                seed_genres=valid_genres,
+                limit=5,
+                **audio_features
+            )
+            
+            logger.debug("Successfully got advanced recommendations")
         except Exception as e:
-            logger.warning(f"Genre-based recommendations failed: {str(e)}")
+            logger.warning(f"Advanced recommendations failed: {str(e)}")
             traceback.print_exc()
             
-            # Method 2: Try with artist seeding from newly released tracks
+            # Method 2: Try simpler genre-based recommendations
             try:
-                logger.debug("Trying artist-based recommendations from new releases")
-                new_releases = sp.new_releases(limit=2)
-                if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
-                    # Get artist IDs from new releases
-                    artist_ids = [album['artists'][0]['id'] for album in new_releases['albums']['items']]
-                    recommendations = sp.recommendations(seed_artists=artist_ids[:2], limit=5)
-                    logger.debug("Successfully got artist-based recommendations")
-                else:
-                    raise Exception("No new releases found")
-            except Exception as e2:
-                logger.warning(f"Artist-based recommendations failed: {str(e2)}")
+                logger.debug("Trying simple genre-based recommendations")
                 
-                # Method 3: Try with featured playlists
+                # Fall back to a simpler request
+                recommendations = sp.recommendations(seed_genres=[genre], limit=5)
+                logger.debug("Successfully got simple genre recommendations")
+            except Exception as e2:
+                logger.warning(f"Simple genre recommendations failed: {str(e2)}")
+                
+                # Method 3: Try with top artists or tracks
                 try:
-                    logger.debug("Trying to get tracks from featured playlists")
-                    playlists = sp.featured_playlists(limit=1)
-                    if playlists and 'playlists' in playlists and playlists['playlists']['items']:
-                        playlist_id = playlists['playlists']['items'][0]['id']
-                        tracks_response = sp.playlist_tracks(playlist_id, limit=5)
-                        
-                        if tracks_response and 'items' in tracks_response:
-                            tracks = [item['track'] for item in tracks_response['items'] if item.get('track')]
-                            if tracks:
-                                recommendations = {'tracks': tracks}
-                                logger.debug("Successfully got tracks from featured playlist")
-                            else:
-                                raise Exception("No tracks found in playlist")
-                        else:
-                            raise Exception("Invalid playlist tracks response")
+                    logger.debug("Trying artist-based recommendations")
+                    new_releases = sp.new_releases(limit=2)
+                    if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
+                        # Get artist IDs from new releases
+                        artist_ids = [album['artists'][0]['id'] for album in new_releases['albums']['items']]
+                        recommendations = sp.recommendations(seed_artists=artist_ids[:2], limit=5)
+                        logger.debug("Successfully got artist-based recommendations")
                     else:
-                        raise Exception("No featured playlists found")
+                        raise Exception("No new releases found")
                 except Exception as e3:
-                    logger.warning(f"Featured playlist approach failed: {str(e3)}")
+                    logger.warning(f"Artist-based recommendations failed: {str(e3)}")
                     
-                    # Method 4: Use hardcoded backup tracks as last resort
-                    logger.warning("Using hardcoded backup tracks as last resort")
-                    recommendations = {'tracks': BACKUP_TRACKS}
+                    # Method 4: Try with featured playlists
+                    try:
+                        logger.debug("Trying to get tracks from featured playlists")
+                        playlists = sp.featured_playlists(limit=1)
+                        if playlists and 'playlists' in playlists and playlists['playlists']['items']:
+                            playlist_id = playlists['playlists']['items'][0]['id']
+                            tracks_response = sp.playlist_tracks(playlist_id, limit=5)
+                            
+                            if tracks_response and 'items' in tracks_response:
+                                tracks = [item['track'] for item in tracks_response['items'] if item.get('track')]
+                                if tracks:
+                                    recommendations = {'tracks': tracks}
+                                    logger.debug("Successfully got tracks from featured playlist")
+                                else:
+                                    raise Exception("No tracks found in playlist")
+                            else:
+                                raise Exception("Invalid playlist tracks response")
+                        else:
+                            raise Exception("No featured playlists found")
+                    except Exception as e4:
+                        logger.warning(f"Featured playlist approach failed: {str(e4)}")
+                        
+                        # Method 5: Use hardcoded backup tracks based on mood
+                        if mood_category in BACKUP_TRACKS_BY_MOOD:
+                            logger.warning(f"Using backup tracks for mood: {mood_category}")
+                            recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD[mood_category]}
+                        else:
+                            logger.warning("Using default backup tracks")
+                            recommendations = {'tracks': BACKUP_TRACKS_BY_MOOD['default']}
         
         # Return the results
         if recommendations and 'tracks' in recommendations and recommendations['tracks']:
@@ -332,9 +521,14 @@ def analyze_mood():
         else:
             # This should never happen with our fallbacks, but just in case
             logger.error("No recommendations found after all attempts")
+            if mood_category in BACKUP_TRACKS_BY_MOOD:
+                backup_tracks = BACKUP_TRACKS_BY_MOOD[mood_category]
+            else:
+                backup_tracks = BACKUP_TRACKS_BY_MOOD['default']
+                
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': BACKUP_TRACKS
+                'recommendations': backup_tracks
             })
             
     except Exception as e:
@@ -343,15 +537,20 @@ def analyze_mood():
         
         # Return backup tracks with the mood analysis
         try:
+            if 'mood_category' in locals() and mood_category in BACKUP_TRACKS_BY_MOOD:
+                backup_tracks = BACKUP_TRACKS_BY_MOOD[mood_category]
+            else:
+                backup_tracks = BACKUP_TRACKS_BY_MOOD['default']
+                
             return jsonify({
                 'mood_analysis': mood_analysis if 'mood_analysis' in locals() else "I analyzed your mood and found some music recommendations.",
-                'recommendations': BACKUP_TRACKS
+                'recommendations': backup_tracks
             })
         except:
             # Ultimate fallback
             return jsonify({
                 'mood_analysis': "I analyzed your mood and found some music recommendations.",
-                'recommendations': BACKUP_TRACKS
+                'recommendations': BACKUP_TRACKS_BY_MOOD['default']
             })
 
 @app.route('/logout')
