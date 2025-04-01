@@ -509,15 +509,30 @@ def analyze_mood():
             all_tracks = []
             attempt_count = 0
             
-            while len(all_tracks) < 5 and attempt_count < 3:
+            # Make 5-6 attempts to gather more tracks
+            max_attempts = 5
+            while len(all_tracks) < 12 and attempt_count < max_attempts:
                 # Add randomness by using different genres from our valid set on each attempt
                 attempt_count += 1
+                
+                # If we have multiple attempts, shuffle audio features slightly each time
+                if attempt_count > 1:
+                    if 'target_tempo' in audio_features:
+                        audio_features['target_tempo'] += random.randint(-15, 15)
+                    if 'min_energy' in audio_features:
+                        audio_features['min_energy'] = max(0.0, min(1.0, audio_features['min_energy'] + random.uniform(-0.15, 0.15)))
+                    if 'max_energy' in audio_features:
+                        audio_features['max_energy'] = max(0.0, min(1.0, audio_features['max_energy'] + random.uniform(-0.15, 0.15)))
+                    if 'min_valence' in audio_features:
+                        audio_features['min_valence'] = max(0.0, min(1.0, audio_features['min_valence'] + random.uniform(-0.15, 0.15)))
+                    if 'max_valence' in audio_features:
+                        audio_features['max_valence'] = max(0.0, min(1.0, audio_features['max_valence'] + random.uniform(-0.15, 0.15)))
                 
                 # Get recommendations with specific audio features for this mood
                 logger.debug(f"Attempt {attempt_count}: Calling Spotify recommendations API with genres={valid_genres}, features={audio_features}")
                 current_recs = sp.recommendations(
                     seed_genres=valid_genres,
-                    limit=10,  # Request more than we need to filter
+                    limit=20,  # Request more than we need to filter
                     **audio_features
                 )
                 
@@ -545,7 +560,7 @@ def analyze_mood():
                     all_tracks.extend(filtered_tracks)
                     
                     # If we have enough tracks, break out
-                    if len(all_tracks) >= 5:
+                    if len(all_tracks) >= 12:
                         break
                     
                     # Otherwise, adjust our parameters for the next attempt
@@ -554,17 +569,24 @@ def analyze_mood():
                         random.shuffle(valid_genres)
                 
                 # Only make additional attempts if we need more tracks
-                if len(all_tracks) >= 5:
+                if len(all_tracks) >= 12:
                     break
+                
+                # If we're making multiple attempts, try a different approach
+                if attempt_count == 3 and len(all_tracks) < 8:
+                    # Try with a completely different genre for more variety
+                    different_genres = ["pop", "rock", "indie", "dance", "electronic", "hip-hop", "jazz", "classical"]
+                    random.shuffle(different_genres)
+                    valid_genres = different_genres[:2]
                 
                 # Wait briefly between attempts to avoid rate limiting
                 time.sleep(0.1)
             
-            # Take the top 5 tracks or whatever we got
+            # Take the tracks or whatever we got
             if all_tracks:
-                recommendations = {'tracks': all_tracks[:5]}
+                recommendations = {'tracks': all_tracks[:12]}
                 source = "spotify_advanced"
-                logger.debug(f"Successfully got {len(all_tracks[:5])} advanced recommendations")
+                logger.debug(f"Successfully got {len(all_tracks[:12])} advanced recommendations")
             else:
                 raise Exception("No valid tracks found after multiple attempts")
         except Exception as e:
@@ -574,31 +596,44 @@ def analyze_mood():
             # Method 2: Try with user's top tracks for diversity
             try:
                 logger.debug("Trying to get recommendations based on user's top tracks")
-                top_tracks = sp.current_user_top_tracks(limit=5, time_range='medium_term')
+                top_tracks = sp.current_user_top_tracks(limit=10, time_range='medium_term')
                 
                 if top_tracks and 'items' in top_tracks and top_tracks['items']:
                     # Use track IDs from user's top tracks as seeds
-                    track_ids = [track['id'] for track in top_tracks['items'][:2]]
+                    track_ids = [track['id'] for track in top_tracks['items'][:3]]
                     if track_ids:
-                        top_based_recommendations = sp.recommendations(
-                            seed_tracks=track_ids,
-                            limit=5
-                        )
-                        
-                        if top_based_recommendations and 'tracks' in top_based_recommendations:
-                            # Filter out tracks with bad images
-                            filtered_tracks = [
-                                t for t in top_based_recommendations['tracks'] 
-                                if t.get('album') and t['album'].get('images') and 
-                                len(t['album']['images']) > 0 and
-                                not t['album']['images'][0]['url'].endswith('dog.jpg')
-                            ]
+                        # Make multiple calls with different seeds for variety
+                        all_tracks = []
+                        for i in range(min(3, len(track_ids))):
+                            seed_id = track_ids[i]
+                            top_based_recommendations = sp.recommendations(
+                                seed_tracks=[seed_id],
+                                limit=10
+                            )
                             
-                            if filtered_tracks:
-                                recommendations = {'tracks': filtered_tracks[:5]}
-                                source = "spotify_user_top_tracks"
-                                logger.debug(f"Successfully got {len(filtered_tracks[:5])} recommendations based on user's top tracks")
-                                raise Exception("Proceeding to next method since no tracks from user's top")
+                            if top_based_recommendations and 'tracks' in top_based_recommendations:
+                                # Filter out tracks with bad images
+                                filtered_tracks = [
+                                    t for t in top_based_recommendations['tracks'] 
+                                    if t.get('album') and t['album'].get('images') and 
+                                    len(t['album']['images']) > 0 and
+                                    not t['album']['images'][0]['url'].endswith('dog.jpg')
+                                ]
+                                
+                                # Add unique tracks
+                                for track in filtered_tracks:
+                                    track_id = track.get('id')
+                                    if track_id and not any(t.get('id') == track_id for t in all_tracks):
+                                        all_tracks.append(track)
+                                        
+                        if all_tracks:
+                            recommendations = {'tracks': all_tracks[:12]}
+                            source = "spotify_user_top_tracks"
+                            logger.debug(f"Successfully got {len(all_tracks[:12])} recommendations based on user's top tracks")
+                        else:
+                            raise Exception("No valid tracks after filtering user top tracks recommendations")
+                    else:
+                        raise Exception("No valid track IDs found in user's top tracks")
                 else:
                     logger.warning("No user top tracks found")
                     raise Exception("No top tracks found")
@@ -609,49 +644,59 @@ def analyze_mood():
                 try:
                     logger.debug("Trying simple genre-based recommendations")
                     
-                    # Try with popular genres but pick 3 random ones for variety
+                    # Try with popular genres but pick more random ones for variety
                     popular_genres = ["pop", "rock", "hip-hop", "dance", "electronic", "indie", "r-n-b", "jazz", "classical"]
                     random.shuffle(popular_genres)
-                    selected_genres = popular_genres[:3]
                     
-                    logger.debug(f"Using popular genres '{selected_genres}' for simple recommendations")
-                    
-                    # Fall back to a simpler request with minimal parameters
-                    simple_recommendations = sp.recommendations(seed_genres=selected_genres, limit=10)
-                    
-                    # Verify we got actual tracks with good images
-                    if simple_recommendations and 'tracks' in simple_recommendations:
-                        filtered_tracks = [
-                            t for t in simple_recommendations['tracks'] 
-                            if t.get('album') and t['album'].get('images') and 
-                            len(t['album']['images']) > 0 and
-                            not t['album']['images'][0]['url'].endswith('dog.jpg')
-                        ]
-                        
-                        if filtered_tracks:
-                            recommendations = {'tracks': filtered_tracks[:5]}
-                            track_names = [t['name'] for t in filtered_tracks[:5]]
-                            logger.debug(f"Got {len(filtered_tracks[:5])} simple recommendations: {track_names}")
+                    # Make multiple calls with different genre combinations
+                    all_tracks = []
+                    for i in range(3):  # Try 3 different genre combinations
+                        selected_genres = popular_genres[i*3:(i+1)*3]
+                        if not selected_genres:
+                            break
                             
-                            source = "spotify_simple"
-                            logger.debug("Successfully got simple genre recommendations")
-                        else:
-                            raise Exception("No valid tracks after filtering")
+                        logger.debug(f"Using popular genres '{selected_genres}' for simple recommendations")
+                        
+                        # Fall back to a simpler request with minimal parameters
+                        simple_recommendations = sp.recommendations(seed_genres=selected_genres, limit=10)
+                        
+                        # Verify we got actual tracks with good images
+                        if simple_recommendations and 'tracks' in simple_recommendations:
+                            filtered_tracks = [
+                                t for t in simple_recommendations['tracks'] 
+                                if t.get('album') and t['album'].get('images') and 
+                                len(t['album']['images']) > 0 and
+                                not t['album']['images'][0]['url'].endswith('dog.jpg')
+                            ]
+                            
+                            # Add unique tracks
+                            for track in filtered_tracks:
+                                track_id = track.get('id')
+                                if track_id and not any(t.get('id') == track_id for t in all_tracks):
+                                    all_tracks.append(track)
+                    
+                    if all_tracks:
+                        recommendations = {'tracks': all_tracks[:12]}
+                        track_names = [t['name'] for t in all_tracks[:5]]
+                        logger.debug(f"Got {len(all_tracks[:12])} simple recommendations: {track_names}")
+                        
+                        source = "spotify_simple"
+                        logger.debug("Successfully got simple genre recommendations")
                     else:
-                        raise Exception("Empty recommendations returned")
+                        raise Exception("No valid tracks after filtering")
                 except Exception as e3:
                     logger.warning(f"Simple genre recommendations failed: {str(e3)}")
                     
                     # Method 4: Try with featured playlists as a more reliable option
                     try:
                         logger.debug("Trying to get tracks from featured playlists")
-                        playlists = sp.featured_playlists(limit=5)
+                        playlists = sp.featured_playlists(limit=8)
                         
                         if playlists and 'playlists' in playlists and playlists['playlists']['items']:
                             # Try multiple playlists to get more variety
                             all_tracks = []
                             
-                            for playlist_item in playlists['playlists']['items'][:3]:  # Try up to 3 playlists
+                            for playlist_item in playlists['playlists']['items'][:5]:  # Try up to 5 playlists
                                 try:
                                     playlist_id = playlist_item['id']
                                     logger.debug(f"Checking featured playlist: {playlist_item['name']} (ID: {playlist_id})")
@@ -677,7 +722,7 @@ def analyze_mood():
                                         logger.debug(f"Found {len(playlist_tracks)} valid tracks in playlist {playlist_item['name']}")
                                         
                                         # If we have enough tracks, stop looking at more playlists
-                                        if len(all_tracks) >= 5:
+                                        if len(all_tracks) >= 15:
                                             break
                                 except Exception as playlist_err:
                                     logger.warning(f"Error processing playlist {playlist_id}: {str(playlist_err)}")
@@ -686,9 +731,9 @@ def analyze_mood():
                             if all_tracks:
                                 # Randomize the order for variety
                                 random.shuffle(all_tracks)
-                                recommendations = {'tracks': all_tracks[:5]}
+                                recommendations = {'tracks': all_tracks[:12]}
                                 source = "spotify_featured_playlist"
-                                logger.debug(f"Successfully got {len(all_tracks[:5])} tracks from featured playlists")
+                                logger.debug(f"Successfully got {len(all_tracks[:12])} tracks from featured playlists")
                             else:
                                 raise Exception("No valid tracks found in any featured playlists")
                         else:
@@ -699,10 +744,10 @@ def analyze_mood():
                         # Method 5: Try with new releases
                         try:
                             logger.debug("Trying to get tracks from new releases")
-                            new_releases = sp.new_releases(limit=10)
+                            new_releases = sp.new_releases(limit=15)
                             if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
                                 # Get more albums than before
-                                albums = new_releases['albums']['items'][:5]
+                                albums = new_releases['albums']['items'][:8]
                                 all_tracks = []
                                 
                                 for album in albums:
@@ -737,7 +782,7 @@ def analyze_mood():
                                                 logger.debug(f"Added {len(album_tracks['items'][:2])} tracks from album {album_name}")
                                                 
                                                 # If we have enough tracks, stop processing more albums
-                                                if len(all_tracks) >= 5:
+                                                if len(all_tracks) >= 15:
                                                     break
                                     except Exception as album_err:
                                         logger.warning(f"Error getting album tracks: {str(album_err)}")
@@ -745,9 +790,9 @@ def analyze_mood():
                                 if all_tracks:
                                     # Randomize the track order for variety
                                     random.shuffle(all_tracks)
-                                    recommendations = {'tracks': all_tracks[:5]}
+                                    recommendations = {'tracks': all_tracks[:12]}
                                     source = "spotify_new_releases"
-                                    logger.debug(f"Successfully got {len(all_tracks[:5])} tracks from new releases")
+                                    logger.debug(f"Successfully got {len(all_tracks[:12])} tracks from new releases")
                                 else:
                                     raise Exception("No tracks found in new releases")
                             else:
