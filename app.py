@@ -352,16 +352,27 @@ def analyze_mood_text(text):
 def get_spotify_client():
     """Get a fresh Spotify client with valid access token"""
     if 'token_info' not in session:
+        logger.error("No token_info in session")
         return None
     
     token_info = session['token_info']
     
     # Check if token is expired and refresh if needed
-    if sp_oauth.is_token_expired(token_info):
-        token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
-        session['token_info'] = token_info
-    
-    return Spotify(auth=token_info['access_token'])
+    try:
+        if sp_oauth.is_token_expired(token_info):
+            logger.info("Token expired, refreshing...")
+            token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+            session['token_info'] = token_info
+            logger.info("Token refreshed successfully")
+        
+        # Print token details (excluding sensitive parts)
+        token_preview = f"...{token_info['access_token'][-8:]}" if token_info.get('access_token') else "None"
+        logger.debug(f"Using access token ending with: {token_preview}")
+        
+        return Spotify(auth=token_info['access_token'])
+    except Exception as e:
+        logger.error(f"Error in get_spotify_client: {str(e)}")
+        return None
 
 @app.route('/')
 def index():
@@ -421,7 +432,23 @@ def analyze_mood():
         # Get a fresh Spotify client
         sp = get_spotify_client()
         if not sp:
-            return jsonify({'error': 'Spotify authentication expired'}), 401
+            logger.error("Failed to get Spotify client - clearing session and returning to login")
+            session.clear()
+            return jsonify({'error': 'Spotify authentication expired, please log in again'}), 401
+        
+        # Verify the Spotify client is working before proceeding
+        try:
+            # Simple API call to test connectivity
+            logger.debug("Testing Spotify API connectivity...")
+            user_info = sp.current_user()
+            logger.debug(f"Spotify API test successful. Connected as: {user_info['display_name']}")
+        except Exception as e:
+            logger.error(f"Spotify API connectivity test failed: {str(e)}")
+            # If it's an authentication error, clear session
+            if "authentication" in str(e).lower() or "unauthorized" in str(e).lower() or "token" in str(e).lower():
+                session.clear()
+                return jsonify({'error': 'Spotify authentication failed, please log in again'}), 401
+            # Otherwise continue with fallbacks
         
         # Try multiple methods to get recommendations, with increasing fallbacks
         recommendations = None
@@ -447,12 +474,40 @@ def analyze_mood():
             
             logger.debug(f"Using genres: {valid_genres} with audio features: {audio_features}")
             
+            # Get available genre seeds from Spotify (for debugging)
+            try:
+                available_genres = sp.recommendation_genre_seeds()
+                logger.debug(f"Available Spotify genres: {available_genres}")
+                
+                # Verify our genres are actually in the list
+                spotify_genres = available_genres.get('genres', [])
+                for genre in valid_genres:
+                    if genre not in spotify_genres:
+                        logger.warning(f"Genre '{genre}' not in Spotify's available genres!")
+                
+                # Ensure we're using actual available genres
+                valid_genres = [g for g in valid_genres if g in spotify_genres]
+                if not valid_genres:
+                    valid_genres = ["pop"]
+                    logger.warning("No valid genres found, falling back to 'pop'")
+            except Exception as genre_err:
+                logger.warning(f"Failed to get genre seeds: {str(genre_err)}")
+            
             # Get recommendations with specific audio features for this mood
+            logger.debug(f"Calling Spotify recommendations API with genres={valid_genres}, features={audio_features}")
             recommendations = sp.recommendations(
                 seed_genres=valid_genres,
                 limit=5,
                 **audio_features
             )
+            
+            # Verify we got actual tracks
+            if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
+                logger.warning("Spotify returned empty recommendations")
+                raise Exception("Empty recommendations returned")
+                
+            track_names = [t['name'] for t in recommendations['tracks']]
+            logger.debug(f"Got {len(track_names)} recommendations: {track_names}")
             
             source = "spotify_advanced"
             logger.debug("Successfully got advanced recommendations")
@@ -464,51 +519,89 @@ def analyze_mood():
             try:
                 logger.debug("Trying simple genre-based recommendations")
                 
-                # Fall back to a simpler request
-                recommendations = sp.recommendations(seed_genres=[genre], limit=5)
+                # Try with a very basic, reliable genre
+                safe_genre = "pop"
+                logger.debug(f"Using safe genre '{safe_genre}' for simple recommendations")
+                
+                # Fall back to a simpler request with minimal parameters
+                recommendations = sp.recommendations(seed_genres=[safe_genre], limit=5)
+                
+                # Verify we got actual tracks
+                if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
+                    logger.warning("Spotify returned empty simple recommendations")
+                    raise Exception("Empty recommendations returned")
+                    
+                track_names = [t['name'] for t in recommendations['tracks']]
+                logger.debug(f"Got {len(track_names)} simple recommendations: {track_names}")
+                
                 source = "spotify_simple"
                 logger.debug("Successfully got simple genre recommendations")
             except Exception as e2:
                 logger.warning(f"Simple genre recommendations failed: {str(e2)}")
                 
-                # Method 3: Try with top artists or tracks
+                # Method 3: Try with featured playlists as a more reliable option
                 try:
-                    logger.debug("Trying artist-based recommendations")
-                    new_releases = sp.new_releases(limit=2)
-                    if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
-                        # Get artist IDs from new releases
-                        artist_ids = [album['artists'][0]['id'] for album in new_releases['albums']['items']]
-                        recommendations = sp.recommendations(seed_artists=artist_ids[:2], limit=5)
-                        source = "spotify_new_releases"
-                        logger.debug("Successfully got artist-based recommendations")
-                    else:
-                        raise Exception("No new releases found")
-                except Exception as e3:
-                    logger.warning(f"Artist-based recommendations failed: {str(e3)}")
-                    
-                    # Method 4: Try with featured playlists
-                    try:
-                        logger.debug("Trying to get tracks from featured playlists")
-                        playlists = sp.featured_playlists(limit=1)
-                        if playlists and 'playlists' in playlists and playlists['playlists']['items']:
-                            playlist_id = playlists['playlists']['items'][0]['id']
-                            tracks_response = sp.playlist_tracks(playlist_id, limit=5)
-                            
-                            if tracks_response and 'items' in tracks_response:
-                                tracks = [item['track'] for item in tracks_response['items'] if item.get('track')]
-                                if tracks:
-                                    recommendations = {'tracks': tracks}
-                                    source = "spotify_featured_playlist"
-                                    logger.debug("Successfully got tracks from featured playlist")
-                                else:
-                                    raise Exception("No tracks found in playlist")
-                            else:
-                                raise Exception("Invalid playlist tracks response")
-                        else:
-                            raise Exception("No featured playlists found")
-                    except Exception as e4:
-                        logger.warning(f"Featured playlist approach failed: {str(e4)}")
+                    logger.debug("Trying to get tracks from featured playlists")
+                    playlists = sp.featured_playlists(limit=1)
+                    if playlists and 'playlists' in playlists and playlists['playlists']['items']:
+                        playlist_id = playlists['playlists']['items'][0]['id']
+                        logger.debug(f"Found featured playlist with ID: {playlist_id}")
                         
+                        tracks_response = sp.playlist_tracks(playlist_id, limit=5)
+                        
+                        if tracks_response and 'items' in tracks_response:
+                            tracks = [item['track'] for item in tracks_response['items'] if item.get('track')]
+                            if tracks:
+                                recommendations = {'tracks': tracks}
+                                source = "spotify_featured_playlist"
+                                logger.debug(f"Successfully got {len(tracks)} tracks from featured playlist")
+                            else:
+                                raise Exception("No tracks found in playlist")
+                        else:
+                            raise Exception("Invalid playlist tracks response")
+                    else:
+                        raise Exception("No featured playlists found")
+                except Exception as e3:
+                    logger.warning(f"Featured playlist approach failed: {str(e3)}")
+                    
+                    # Method 4: Try with new releases
+                    try:
+                        logger.debug("Trying to get tracks from new releases")
+                        new_releases = sp.new_releases(limit=5)
+                        if new_releases and 'albums' in new_releases and new_releases['albums']['items']:
+                            # Get the first few albums
+                            albums = new_releases['albums']['items'][:2]
+                            all_tracks = []
+                            
+                            for album in albums:
+                                try:
+                                    album_id = album['id']
+                                    album_tracks = sp.album_tracks(album_id, limit=3)
+                                    if album_tracks and 'items' in album_tracks:
+                                        all_tracks.extend(album_tracks['items'][:2])  # Get first 2 tracks from each album
+                                except Exception as album_err:
+                                    logger.warning(f"Error getting album tracks: {str(album_err)}")
+                            
+                            if all_tracks:
+                                # Format tracks to match recommendations format
+                                formatted_tracks = []
+                                for track in all_tracks:
+                                    track_with_album = track.copy()
+                                    # Add album info if it's missing
+                                    if 'album' not in track_with_album and albums:
+                                        track_with_album['album'] = albums[0]
+                                    formatted_tracks.append(track_with_album)
+                                
+                                recommendations = {'tracks': formatted_tracks[:5]}  # Limit to 5 tracks
+                                source = "spotify_new_releases"
+                                logger.debug(f"Successfully got {len(formatted_tracks)} tracks from new releases")
+                            else:
+                                raise Exception("No tracks found in new releases")
+                        else:
+                            raise Exception("No new releases found")
+                    except Exception as e4:
+                        logger.warning(f"New releases approach failed: {str(e4)}")
+                    
                         # Method 5: Use hardcoded backup tracks based on mood
                         if mood_category in BACKUP_TRACKS_BY_MOOD:
                             logger.warning(f"Using backup tracks for mood: {mood_category}")
