@@ -846,7 +846,8 @@ def analyze_mood():
         if recommendations and 'tracks' in recommendations and recommendations['tracks']:
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': recommendations['tracks']
+                'recommendations': recommendations['tracks'],
+                'source': source
             })
         else:
             # This should never happen with our fallbacks, but just in case
@@ -858,7 +859,8 @@ def analyze_mood():
                 
             return jsonify({
                 'mood_analysis': mood_analysis,
-                'recommendations': backup_tracks
+                'recommendations': backup_tracks,
+                'source': source
             })
             
     except Exception as e:
@@ -877,9 +879,12 @@ def analyze_mood():
             # Log the source but don't include in response
             logger.debug(f"Using fallback tracks from source: {source}")
                 
+            source_value = source if 'source' in locals() else 'error_fallback_default'
+            
             return jsonify({
                 'mood_analysis': mood_analysis if 'mood_analysis' in locals() else "I analyzed your mood and found some music recommendations.",
-                'recommendations': backup_tracks
+                'recommendations': backup_tracks,
+                'source': source_value
             })
         except:
             # Ultimate fallback

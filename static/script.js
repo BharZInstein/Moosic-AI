@@ -4,75 +4,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsSection = document.getElementById('resultsSection');
     const moodAnalysis = document.getElementById('moodAnalysis');
     const recommendationsList = document.getElementById('recommendationsList');
+    const errorMessage = document.getElementById('errorMessage');
+    const defaultImage = document.body.dataset.defaultImage || '/static/default-avatar.png';
+    const moodChips = document.querySelectorAll('.chips span');
+    const defaultButtonText = analyzeButton ? analyzeButton.textContent : 'Analyze Mood';
 
-    // Add loading state styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .loading {
-            opacity: 0.7;
-            pointer-events: none;
-        }
-        .error-message {
-            color: #ff7675;
-            background: #fff5f5;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
-        }
-        .track-card {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 1rem;
-            margin-bottom: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .track-card img {
-            width: 150px;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 4px;
-            margin-bottom: 0.5rem;
-        }
-        .track-card h4 {
-            margin: 0.5rem 0;
-            font-size: 1.1rem;
-        }
-        .track-card p {
-            margin: 0.25rem 0 1rem;
-            color: #666;
-        }
-        .cta-button {
-            background: #1DB954;
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 0.5rem 1.5rem;
-            font-weight: bold;
-            text-decoration: none;
-            transition: background 0.3s;
-        }
-        .cta-button:hover {
-            background: #179443;
-        }
-        #recommendationsList {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .source-info {
-            background: #e2f0ff;
-            color: #0056b3;
-            padding: 0.5rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            margin: 0.5rem 0;
-        }
-    `;
-    document.head.appendChild(style);
+    const setLoadingState = (isLoading) => {
+        analyzeButton.disabled = isLoading;
+        analyzeButton.textContent = isLoading ? 'Analyzing...' : defaultButtonText;
+        moodText.classList.toggle('loading', isLoading);
+    };
+
+    const clearResults = () => {
+        resultsSection.style.display = 'none';
+        moodAnalysis.textContent = '';
+        recommendationsList.innerHTML = '';
+    };
+
+    const hideError = () => {
+        errorMessage.style.display = 'none';
+        errorMessage.innerHTML = '';
+    };
+
+    const showError = (message) => {
+        errorMessage.innerHTML = `
+            <h3>Error</h3>
+            <p>${message}</p>
+            <p>Please try again or describe your mood differently.</p>
+        `;
+        errorMessage.style.display = 'block';
+        resultsSection.style.display = 'block';
+        resultsSection.scrollIntoView({ behavior: 'smooth' });
+    };
 
     analyzeButton.addEventListener('click', async () => {
         const text = moodText.value.trim();
@@ -81,99 +44,102 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        try {
-            // Add loading state
-            analyzeButton.disabled = true;
-            analyzeButton.textContent = 'Analyzing...';
-            moodText.classList.add('loading');
-            
-            // Clear previous results
-            resultsSection.style.display = 'none';
-            moodAnalysis.textContent = '';
-            recommendationsList.innerHTML = '';
+        setLoadingState(true);
+        clearResults();
+        hideError();
 
+        try {
             const response = await fetch('/analyze_mood', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text }),
             });
 
             const data = await response.json();
-
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to analyze mood');
             }
-            
-            // Display mood analysis
-            moodAnalysis.textContent = data.mood_analysis;
-            
-            // Display source information if available
-            let sourceHTML = '';
-            if (data.source) {
-                sourceHTML = `<div class="source-info">Source: ${formatSourceInfo(data.source)}</div>`;
-            }
-            
-            // Display recommendations
-            if (data.recommendations && data.recommendations.length > 0) {
-                recommendationsList.innerHTML = sourceHTML + data.recommendations
-                    .map(track => `
-                        <div class="track-card">
-                            <img src="${track.album.images[0].url}" alt="${track.name}">
-                            <h4>${track.name}</h4>
-                            <p>${track.artists.map(artist => artist.name).join(', ')}</p>
-                            <a href="${track.external_urls.spotify}" target="_blank" class="cta-button">Play on Spotify</a>
-                        </div>
-                    `)
+
+            moodAnalysis.textContent = data.mood_analysis || 'No mood analysis available.';
+
+            const sourceInfo = data.source
+                ? `<div class="source-info">Source: ${formatSourceInfo(data.source)}</div>`
+                : '';
+
+            if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+                const cards = data.recommendations
+                    .map((track) => buildTrackCard(track))
                     .join('');
+                recommendationsList.innerHTML = sourceInfo + cards;
             } else {
-                recommendationsList.innerHTML = sourceHTML + '<p>No recommendations found. Try describing your mood differently.</p>';
+                recommendationsList.innerHTML =
+                    sourceInfo + '<p>No recommendations found. Try describing your mood differently.</p>';
             }
 
-            // Show results section
             resultsSection.style.display = 'block';
-            
-            // Scroll to results
             resultsSection.scrollIntoView({ behavior: 'smooth' });
-
         } catch (error) {
             console.error('Error:', error);
-            // Display error message in the UI
-            resultsSection.style.display = 'block';
-            resultsSection.innerHTML = `
-                <div class="error-message">
-                    <h3>Error</h3>
-                    <p>${error.message}</p>
-                    <p>Please try again or describe your mood differently.</p>
-                </div>
-            `;
-            resultsSection.scrollIntoView({ behavior: 'smooth' });
+            showError(error.message || 'Failed to analyze mood.');
         } finally {
-            // Remove loading state
-            analyzeButton.disabled = false;
-            analyzeButton.textContent = 'Analyze Mood';
-            moodText.classList.remove('loading');
+            setLoadingState(false);
         }
     });
-    
-    // Format source info into a more user-friendly message
-    function formatSourceInfo(source) {
+
+    moodChips.forEach((chip) => {
+        chip.addEventListener('click', () => {
+            moodText.value = chip.textContent;
+            moodText.focus();
+        });
+    });
+
+    const buildTrackCard = (track) => {
+        const imageUrl =
+            track?.album?.images && track.album.images.length > 0
+                ? track.album.images[0].url
+                : defaultImage;
+        const artistNames = Array.isArray(track?.artists)
+            ? track.artists.map((artist) => artist.name).join(', ')
+            : 'Unknown Artist';
+        const spotifyUrl = track?.external_urls?.spotify || '#';
+
+        return `
+            <div class="track-card">
+                <img src="${imageUrl}" alt="${track?.name || 'Track artwork'}">
+                <h4>${track?.name || 'Unknown Track'}</h4>
+                <p>${artistNames}</p>
+                <a href="${spotifyUrl}" target="_blank" rel="noopener" class="cta-button">Play on Spotify</a>
+            </div>
+        `;
+    };
+
+    const formatSourceInfo = (source) => {
+        if (!source) {
+            return 'Unknown source';
+        }
+
         if (source.startsWith('spotify_advanced')) {
             return 'Spotify API with advanced mood parameters';
-        } else if (source.startsWith('spotify_simple')) {
+        }
+        if (source.startsWith('spotify_simple')) {
             return 'Spotify API with basic genre recommendations';
-        } else if (source.startsWith('spotify_new_releases')) {
+        }
+        if (source.startsWith('spotify_new_releases')) {
             return 'Spotify API based on new releases';
-        } else if (source.startsWith('spotify_featured_playlist')) {
+        }
+        if (source.startsWith('spotify_featured_playlist')) {
             return 'Spotify API featured playlist';
-        } else if (source.startsWith('fallback_')) {
+        }
+        if (source.startsWith('spotify_user_top_tracks')) {
+            return 'Spotify API using your top tracks';
+        }
+        if (source.startsWith('fallback_')) {
             const mood = source.replace('fallback_', '');
             return `Fallback tracks for ${mood} mood`;
-        } else if (source.includes('fallback')) {
-            return 'Fallback tracks';
-        } else {
-            return source;
         }
-    }
+        if (source.includes('fallback')) {
+            return 'Fallback tracks';
+        }
+        return source;
+    };
 });

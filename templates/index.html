@@ -3,25 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moosic AI - Your Mood-Based Music Companion</title>
+    <title>Moosic AI · Mood-Based Spotify Companion</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <header>
+<body class="landing-body">
+    <div class="ambient-glow glow-one"></div>
+    <div class="ambient-glow glow-two"></div>
+    <div class="ambient-glow glow-three"></div>
+
+    <div class="simple-container">
+        <header class="simple-header glass-card">
             <h1>Moosic AI</h1>
             <p class="tagline">Your Mood-Based Music Companion</p>
         </header>
-        
-        <main>
-            <section class="hero">
-                <h2>Discover Music That Matches Your Mood</h2>
-                <p>Connect with Spotify and let AI analyze your mood to create the perfect playlist.</p>
-                <a href="{{ url_for('login') }}" class="cta-button">Connect with Spotify</a>
+
+        <main class="simple-main glass-card">
+            <section class="simple-hero">
+                <div>
+                    <h2>Discover Music That Matches Your Mood</h2>
+                    <p>Connect with Spotify and let AI analyze your mood to create the perfect playlist.</p>
+                </div>
+                <a href="{{ url_for('login') }}" class="cta-button primary large">Connect with Spotify</a>
             </section>
-            
-            <section class="features">
+
+            <section class="simple-features" id="features">
                 <div class="feature-card">
                     <h3>Mood Analysis</h3>
                     <p>Our AI analyzes your text to understand your current mood.</p>
@@ -36,10 +42,10 @@
                 </div>
             </section>
         </main>
-        
-        <footer>
+
+        <footer class="simple-footer">
             <p>&copy; 2024 Moosic AI. All rights reserved.</p>
         </footer>
     </div>
 </body>
-</html> 
+</html>
