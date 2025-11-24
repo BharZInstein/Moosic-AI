@@ -35,16 +35,26 @@ console_handler.setLevel(logging.INFO)
 console_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
 console_handler.setFormatter(console_formatter)
 
-# File handler with sensitive data filtering
-file_handler = logging.FileHandler('app.log')
-file_handler.setLevel(logging.DEBUG)
-file_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-file_handler.setFormatter(file_formatter)
-file_handler.addFilter(SensitiveDataFilter())
+# File handler with sensitive data filtering (falls back to console-only on read-only FS)
+file_handler = None
+log_file_path = os.getenv('APP_LOG_PATH')
+if not log_file_path:
+    log_file_path = '/tmp/app.log' if os.getenv('VERCEL') else 'app.log'
+
+try:
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+    file_handler.setFormatter(file_formatter)
+    file_handler.addFilter(SensitiveDataFilter())
+except OSError:
+    logger.warning("Unable to create log file at %s; continuing with console logs only", log_file_path)
+    file_handler = None
 
 # Add handlers
 logger.addHandler(console_handler)
-logger.addHandler(file_handler)
+if file_handler:
+    logger.addHandler(file_handler)
 
 # Load environment variables
 load_dotenv()
