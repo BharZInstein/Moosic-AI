@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body class="app-body" data-default-image="{{ url_for('static', filename='default-avatar.png') }}">
     <div class="ambient-glow glow-one"></div>
     <div class="ambient-glow glow-two"></div>
@@ -16,7 +18,8 @@
         <header class="dashboard-header glass-card">
             <h1>Welcome, {{ user.display_name }}!</h1>
             <div class="user-info">
-                <img src="{{ user.images[0].url if user.images else url_for('static', filename='default-avatar.png') }}" alt="Profile" class="profile-image">
+                <img src="{{ user.images[0].url if user.images else url_for('static', filename='default-avatar.png') }}"
+                    alt="Profile" class="profile-image">
                 <a href="{{ url_for('logout') }}" class="cta-button ghost">Logout</a>
             </div>
         </header>
@@ -43,10 +46,11 @@
         </main>
 
         <footer class="simple-footer">
-            <p>&copy; 2024 Moosic AI. All rights reserved.</p>
+            <p>made with ❤️ by bharz</p>
         </footer>
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
+
 </html>
